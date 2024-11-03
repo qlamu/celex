@@ -1,42 +1,124 @@
-# Excel/XLSX generator in Elixir
+# Excelixir
 
-##  Usage
+Excelixir is a pure Elixir library for creating Excel XLSX files without any external dependencies. It supports multiple worksheets, cell styling, and formulas while maintaining a simple, flexible API.
 
-### Basic
+## Features
+
+- No external dependencies
+- Multiple worksheets support
+- Cell styling (bold, italic, underline, font size, colors)
+- Formula support
+- Flexible input formats
+- Pure Elixir implementation
+- Based on the Office Open XML format
+
+## Usage
+
+### Simple Single Worksheet
+
+For basic usage, just pass a list of lists:
 
 ```elixir
-# Create sample data
-rows = [
+Excelixir.create_excel("simple.xlsx", [
   ["Name", "Age", "City"],
   ["John", 30, "New York"],
-  ["Alice", 25, "London"],
-  ["Bob", 35, "Paris"],
-  ["Average age", "=AVERAGEA(B2:B4)"]
-]
-
-# Create the Excel file
-Excelixir.create_excel("simple.xlsx", rows)
+  ["Alice", 25, "London"]
+])
 ```
 
-### With cell styles
+### Multiple Worksheets
 
-# Create styled cells
+Create multiple worksheets using a map:
 
 ```elixir
-# Regular cells work as before
-rows = [
-  [Excelixir.Cell.new("Title", bold: true, font_size: 14), "Regular cell", Excelixir.Cell.new("Important", background_color: "FFFF00")],
-  ["Plain text", 42, Excelixir.Cell.new("=SUM(A3:C3)", background_color: "FFFF00")],
-  [10, 20, 30],
-]
-
-Excelixir.create_excel("styles.xlsx", rows)
+Excelixir.create_excel("multi.xlsx", %{
+  "Sales" => [
+    ["Product", "Amount"],
+    ["A", 100],
+    ["B", 200]
+  ],
+  "Costs" => [
+    ["Product", "Cost"],
+    ["A", 50],
+    ["B", 80]
+  ]
+})
 ```
 
-Currently supported styles:
-- `bold`
-- `italic`
-- `underline`
-- `font_size`
-- `font_color`
-- `background_color`
+### Styled Worksheets
+
+For more control over styling and formatting, use the structured approach:
+
+```elixir
+alias Excelixir.{Worksheet, Cell}
+
+worksheets = [
+  Worksheet.new("Sales", [
+    [
+      Cell.new("Product", bold: true, background_color: "FF4F81BD"),
+      Cell.new("Q1", bold: true, background_color: "FF4F81BD"),
+      Cell.new("Q2", bold: true, background_color: "FF4F81BD")
+    ],
+    ["Laptops", 150_000, 180_000],
+    ["Phones", 200_000, 185_000],
+    [
+      Cell.new("Total", bold: true),
+      Cell.new("=SUM(B2:B3)"),
+      Cell.new("=SUM(C2:C3)")
+    ]
+  ]),
+  
+  Worksheet.new("Summary", [
+    [Cell.new("Key Metrics", bold: true, font_size: 14)],
+    ["Total Q2 Sales", "=Sales!C4"],
+    ["Average Sales", "=AVERAGE(Sales!B2:C3)"]
+  ])
+]
+
+Excelixir.create_excel("report.xlsx", worksheets)
+```
+
+## Styling Options
+
+The `Cell.new/2` function supports the following styling options:
+
+```elixir
+Cell.new(value, [
+  bold: true | false,
+  italic: true | false,
+  underline: true | false,
+  font_size: number,
+  font_color: "FFRRGGBB",    # RGB color with FF prefix
+  background_color: "FFRRGGBB"
+])
+```
+
+Examples:
+
+```elixir
+# Bold red text
+Cell.new("Important", bold: true, font_color: "FFFF0000")
+
+# Yellow background
+Cell.new("Highlighted", background_color: "FFFFFF00")
+
+# Multiple styles
+Cell.new("Header", [
+  bold: true,
+  font_size: 14,
+  font_color: "FFFFFFFF",
+  background_color: "FF4F81BD"
+])
+```
+
+## Formula Support
+
+Excel formulas are supported by prefixing the cell value with "=":
+
+```elixir
+# Direct formula
+Cell.new("=SUM(A1:A10)")
+
+# Formula referencing other sheets
+Cell.new("=AVERAGE(Sales!B2:B5)")
+```
