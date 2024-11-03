@@ -12,5 +12,5 @@ rows = [
 ]
 
 # Create the Excel file
-ExcelCreator.create_excel("output.xlsx", rows)
+Excelixir.create_excel("output.xlsx", rows)
 ```
