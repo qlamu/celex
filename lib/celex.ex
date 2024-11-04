@@ -1,4 +1,4 @@
-defmodule Excelixir do
+defmodule Celex do
   @moduledoc """
   Creates Excel XLSX files without external dependencies.
   Uses Office Open XML format with support for cell styling and multiple worksheets.
@@ -6,10 +6,10 @@ defmodule Excelixir do
   Supports both simple list input and structured Worksheet input:
 
       # Simple list (single sheet)
-      Excelixir.create_excel("simple.xlsx", [[1, 2, 3], [4, 5, 6]])
+      Celex.create_excel("simple.xlsx", [[1, 2, 3], [4, 5, 6]])
 
       # Simple lists (multiple sheets)
-      Excelixir.create_excel("multi.xlsx", %{
+      Celex.create_excel("multi.xlsx", %{
         "Sheet1" => [[1, 2, 3], [4, 5, 6]],
         "Sheet2" => [["a", "b"], ["c", "d"]]
       })
@@ -19,7 +19,7 @@ defmodule Excelixir do
         Worksheet.new("Sheet1", [[1, 2, 3]]),
         Worksheet.new("Sheet2", [["a", "b"]])
       ]
-      Excelixir.create_excel("structured.xlsx", worksheets)
+      Celex.create_excel("structured.xlsx", worksheets)
   """
 
   defmodule Style do
@@ -31,7 +31,9 @@ defmodule Excelixir do
               underline: false,
               font_size: 11,
               font_color: nil,
-              background_color: nil
+              background_color: nil,
+              number_format: nil,
+              alignment: nil
 
     def new(opts \\ []) do
       struct!(__MODULE__, opts)
@@ -330,11 +332,20 @@ defmodule Excelixir do
     style_count = length(unique_styles)
     font_definitions = generate_font_definitions(unique_styles)
     fill_definitions = generate_fill_definitions(unique_styles)
+    number_format_definitions = generate_number_format_definitions(unique_styles)
     cell_xfs = generate_cell_xfs(unique_styles)
+    num_fmt_count = count_custom_number_formats(unique_styles)
 
     """
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+      #{if num_fmt_count > 0 do
+        """
+        <numFmts count="#{num_fmt_count}">
+          #{number_format_definitions}
+        </numFmts>
+        """
+      end}
       <fonts count="#{style_count + 1}">
         <font>
           <sz val="11"/>
@@ -364,6 +375,53 @@ defmodule Excelixir do
       </cellXfs>
     </styleSheet>
     """
+  end
+
+  # Map of built-in format codes
+  @built_in_formats %{
+    "general" => 0,
+    "number" => 1,
+    "decimal" => 2,
+    "currency" => 44,
+    "date" => 14,
+    "time" => 21,
+    "percentage" => 9,
+    "fraction" => 12,
+    "scientific" => 11,
+    "accounting" => 43,
+    "short_date" => 14,
+    "long_date" => 15,
+    "short_time" => 20,
+    "long_time" => 21
+  }
+
+  defp generate_number_format_definitions(styles) do
+    styles
+    |> Enum.with_index(164)
+    |> Enum.filter(fn {style, _} ->
+      style.number_format != nil and not Map.has_key?(@built_in_formats, style.number_format)
+    end)
+    |> Enum.map(fn {style, index} ->
+      """
+      <numFmt numFmtId="#{index}" formatCode="#{escape_xml(style.number_format)}"/>
+      """
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp count_custom_number_formats(styles) do
+    styles
+    |> Enum.count(fn style ->
+      style.number_format != nil and not Map.has_key?(@built_in_formats, style.number_format)
+    end)
+  end
+
+  defp get_number_format_id(style, unique_styles) do
+    cond do
+      is_nil(style.number_format) -> 0
+      Map.has_key?(@built_in_formats, style.number_format) -> @built_in_formats[style.number_format]
+      true -> 164 + Enum.find_index(unique_styles, &(&1 == style))
+    end
   end
 
   defp generate_font_definitions(styles) do
@@ -413,19 +471,32 @@ defmodule Excelixir do
     |> Enum.join("\n")
   end
 
-  defp generate_cell_xfs(styles) do
-    styles
-    |> Enum.with_index(1)
-    |> Enum.map(fn {style, index} ->
-      font_id = index
-      fill_id = if style.background_color, do: index + 1, else: 0
-
-      """
-        <xf numFmtId="0" fontId="#{font_id}" fillId="#{fill_id}" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
-      """
-    end)
-    |> Enum.join("\n")
+  defp generate_alignment_attribute(nil), do: ""
+  defp generate_alignment_attribute(alignment) do
+    """
+    <alignment horizontal="#{alignment}"/>
+    """
   end
+
+    defp generate_cell_xfs(styles) do
+      styles
+      |> Enum.with_index(1)
+      |> Enum.map(fn {style, index} ->
+        font_id = index
+        fill_id = if style.background_color, do: index + 1, else: 0
+        num_fmt_id = get_number_format_id(style, styles)
+        alignment = generate_alignment_attribute(style.alignment)
+        apply_number_format = if style.number_format, do: "1", else: "0"
+
+        """
+        <xf numFmtId="#{num_fmt_id}" fontId="#{font_id}" fillId="#{fill_id}" borderId="0" xfId="0"
+            applyFont="1" applyFill="1" applyNumberFormat="#{apply_number_format}" applyAlignment="1">
+          #{alignment}
+        </xf>
+        """
+      end)
+      |> Enum.join("\n")
+    end
 
   defp escape_xml(string) do
     string

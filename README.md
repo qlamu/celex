@@ -1,6 +1,6 @@
-# Excelixir
+# Celex
 
-Excelixir is a pure Elixir library for creating Excel XLSX files without any external dependencies. It supports multiple worksheets, cell styling, and formulas while maintaining a simple, flexible API.
+Celex is a pure Elixir library for creating Excel XLSX files without any external dependencies. It supports multiple worksheets, cell styling, and formulas while maintaining a simple, flexible API.
 
 ## Features
 
@@ -12,6 +12,18 @@ Excelixir is a pure Elixir library for creating Excel XLSX files without any ext
 - Pure Elixir implementation
 - Based on the Office Open XML format
 
+## Installation
+
+Add celex to your list of dependencies in mix.exs:
+
+```elixir
+def deps do
+  [
+    {:celex, git: "https://github.com/qlamu/celex", tag: "0.1.0"}
+  ]
+end
+```
+
 ## Usage
 
 ### Simple Single Worksheet
@@ -19,7 +31,7 @@ Excelixir is a pure Elixir library for creating Excel XLSX files without any ext
 For basic usage, just pass a list of lists:
 
 ```elixir
-Excelixir.create_excel("simple.xlsx", [
+Celex.create_excel("simple.xlsx", [
   ["Name", "Age", "City"],
   ["John", 30, "New York"],
   ["Alice", 25, "London"]
@@ -31,7 +43,7 @@ Excelixir.create_excel("simple.xlsx", [
 Create multiple worksheets using a map:
 
 ```elixir
-Excelixir.create_excel("multi.xlsx", %{
+Celex.create_excel("multi.xlsx", %{
   "Sales" => [
     ["Product", "Amount"],
     ["A", 100],
@@ -50,7 +62,7 @@ Excelixir.create_excel("multi.xlsx", %{
 For more control over styling and formatting, use the structured approach:
 
 ```elixir
-alias Excelixir.{Worksheet, Cell}
+alias Celex.{Worksheet, Cell}
 
 worksheets = [
   Worksheet.new("Sales", [
@@ -75,7 +87,7 @@ worksheets = [
   ])
 ]
 
-Excelixir.create_excel("report.xlsx", worksheets)
+Celex.create_excel("report.xlsx", worksheets)
 ```
 
 ## Styling Options
@@ -88,8 +100,10 @@ Cell.new(value, [
   italic: true | false,
   underline: true | false,
   font_size: number,
-  font_color: "FFRRGGBB",    # RGB color with FF prefix
-  background_color: "FFRRGGBB"
+  font_color: "FFRRGGBB",
+  background_color: "FFRRGGBB",
+  number_format: "currency" | "long_time" | "scientific" | ...,
+  alignment: "center" | "left" | "right"
 ])
 ```
 
@@ -109,6 +123,9 @@ Cell.new("Header", [
   font_color: "FFFFFFFF",
   background_color: "FF4F81BD"
 ])
+
+# Date
+Cell.new(Date.utc_today(), number_format: "short_date")
 ```
 
 ## Formula Support
