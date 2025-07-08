@@ -270,9 +270,9 @@ defmodule Celex do
   defp generate_row_xml({row, row_num}, style_index_map) do
     cells =
       row
-      |> Enum.with_index(?A)
-      |> Enum.map(fn {value, col} ->
-        cell_ref = "#{<<col>>}#{row_num}"
+      |> Enum.with_index(0)
+      |> Enum.map(fn {value, col_index} ->
+        cell_ref = "#{excel_column_name(col_index)}#{row_num}"
         generate_cell_xml(value, cell_ref, style_index_map)
       end)
       |> Enum.join("\n")
@@ -282,6 +282,20 @@ defmodule Celex do
         #{cells}
       </row>
     """
+  end
+
+  def excel_column_name(col_index) when col_index >= 0 do
+    excel_column_name(col_index, "")
+  end
+
+  def excel_column_name(col_index, acc) when col_index < 26 do
+    <<col_index + ?A>> <> acc
+  end
+
+  def excel_column_name(col_index, acc) do
+    remainder = rem(col_index, 26)
+    quotient = div(col_index, 26) - 1
+    excel_column_name(quotient, <<remainder + ?A>> <> acc)
   end
 
   defp generate_cell_xml(value, cell_ref, style_index_map) do
@@ -340,12 +354,12 @@ defmodule Celex do
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
       #{if num_fmt_count > 0 do
-        """
-        <numFmts count="#{num_fmt_count}">
-          #{number_format_definitions}
-        </numFmts>
-        """
-      end}
+      """
+      <numFmts count="#{num_fmt_count}">
+        #{number_format_definitions}
+      </numFmts>
+      """
+    end}
       <fonts count="#{style_count + 1}">
         <font>
           <sz val="11"/>
@@ -418,9 +432,14 @@ defmodule Celex do
 
   defp get_number_format_id(style, unique_styles) do
     cond do
-      is_nil(style.number_format) -> 0
-      Map.has_key?(@built_in_formats, style.number_format) -> @built_in_formats[style.number_format]
-      true -> 164 + Enum.find_index(unique_styles, &(&1 == style))
+      is_nil(style.number_format) ->
+        0
+
+      Map.has_key?(@built_in_formats, style.number_format) ->
+        @built_in_formats[style.number_format]
+
+      true ->
+        164 + Enum.find_index(unique_styles, &(&1 == style))
     end
   end
 
@@ -472,31 +491,32 @@ defmodule Celex do
   end
 
   defp generate_alignment_attribute(nil), do: ""
+
   defp generate_alignment_attribute(alignment) do
     """
     <alignment horizontal="#{alignment}"/>
     """
   end
 
-    defp generate_cell_xfs(styles) do
-      styles
-      |> Enum.with_index(1)
-      |> Enum.map(fn {style, index} ->
-        font_id = index
-        fill_id = if style.background_color, do: index + 1, else: 0
-        num_fmt_id = get_number_format_id(style, styles)
-        alignment = generate_alignment_attribute(style.alignment)
-        apply_number_format = if style.number_format, do: "1", else: "0"
+  defp generate_cell_xfs(styles) do
+    styles
+    |> Enum.with_index(1)
+    |> Enum.map(fn {style, index} ->
+      font_id = index
+      fill_id = if style.background_color, do: index + 1, else: 0
+      num_fmt_id = get_number_format_id(style, styles)
+      alignment = generate_alignment_attribute(style.alignment)
+      apply_number_format = if style.number_format, do: "1", else: "0"
 
-        """
-        <xf numFmtId="#{num_fmt_id}" fontId="#{font_id}" fillId="#{fill_id}" borderId="0" xfId="0"
-            applyFont="1" applyFill="1" applyNumberFormat="#{apply_number_format}" applyAlignment="1">
-          #{alignment}
-        </xf>
-        """
-      end)
-      |> Enum.join("\n")
-    end
+      """
+      <xf numFmtId="#{num_fmt_id}" fontId="#{font_id}" fillId="#{fill_id}" borderId="0" xfId="0"
+          applyFont="1" applyFill="1" applyNumberFormat="#{apply_number_format}" applyAlignment="1">
+        #{alignment}
+      </xf>
+      """
+    end)
+    |> Enum.join("\n")
+  end
 
   defp escape_xml(string) do
     string
