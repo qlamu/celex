@@ -103,6 +103,24 @@ defmodule Celex do
   </Relationships>
   """
 
+  # Map of built-in format codes
+  @built_in_formats %{
+    "general" => 0,
+    "number" => 1,
+    "decimal" => 2,
+    "currency" => 44,
+    "date" => 14,
+    "time" => 21,
+    "percentage" => 9,
+    "fraction" => 12,
+    "scientific" => 11,
+    "accounting" => 43,
+    "short_date" => 14,
+    "long_date" => 15,
+    "short_time" => 20,
+    "long_time" => 21
+  }
+
   @doc """
   Creates an Excel file with support for multiple input formats:
 
@@ -124,8 +142,27 @@ defmodule Celex do
       |> Enum.flat_map(& &1.rows)
       |> extract_unique_styles()
 
+    # Generate a map of custom number formats to their IDs
+    custom_number_format_map =
+      all_styles
+      |> Enum.filter(fn style ->
+        style.number_format != nil and not Map.has_key?(@built_in_formats, style.number_format)
+      end)
+      |> Enum.uniq_by(& &1.number_format)
+      |> Enum.with_index(164)
+      |> Enum.into(%{}, fn {style, index} -> {style.number_format, index} end)
+
+    # Create a map of unique background colors to their fill IDs
+    fill_map =
+      all_styles
+      |> Enum.map(& &1.background_color)
+      |> Enum.filter(&(&1 != nil))
+      |> Enum.uniq()
+      |> Enum.with_index(2)
+      |> Map.new()
+
     # Generate styles XML once for all worksheets
-    styles_xml = generate_styles_xml(all_styles)
+    styles_xml = generate_styles_xml(all_styles, custom_number_format_map, fill_map)
     style_index_map = generate_style_index_map(all_styles)
 
     # Generate worksheet files
@@ -147,7 +184,10 @@ defmodule Celex do
       | worksheet_files
     ]
 
-    :zip.create(String.to_charlist(filename), files)
+    case :zip.create(String.to_charlist(filename), files) do
+      {:ok, _path} -> {:ok, filename}
+      error -> error
+    end
   end
 
   # Normalize different input formats to list of Worksheet structs
@@ -328,13 +368,14 @@ defmodule Celex do
     end
   end
 
-  defp generate_styles_xml(unique_styles) do
+  defp generate_styles_xml(unique_styles, custom_number_format_map, fill_map) do
     style_count = length(unique_styles)
+    fill_count = map_size(fill_map) + 2
     font_definitions = generate_font_definitions(unique_styles)
-    fill_definitions = generate_fill_definitions(unique_styles)
-    number_format_definitions = generate_number_format_definitions(unique_styles)
-    cell_xfs = generate_cell_xfs(unique_styles)
-    num_fmt_count = count_custom_number_formats(unique_styles)
+    fill_definitions = generate_fill_definitions(fill_map)
+    number_format_definitions = generate_number_format_definitions(custom_number_format_map)
+    cell_xfs = generate_cell_xfs(unique_styles, custom_number_format_map, fill_map)
+    num_fmt_count = count_custom_number_formats(custom_number_format_map)
 
     """
     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -354,7 +395,7 @@ defmodule Celex do
         </font>
         #{font_definitions}
       </fonts>
-      <fills count="#{style_count + 2}">
+      <fills count="#{fill_count}">
         <fill>
           <patternFill patternType="none"/>
         </fill>
@@ -377,50 +418,30 @@ defmodule Celex do
     """
   end
 
-  # Map of built-in format codes
-  @built_in_formats %{
-    "general" => 0,
-    "number" => 1,
-    "decimal" => 2,
-    "currency" => 44,
-    "date" => 14,
-    "time" => 21,
-    "percentage" => 9,
-    "fraction" => 12,
-    "scientific" => 11,
-    "accounting" => 43,
-    "short_date" => 14,
-    "long_date" => 15,
-    "short_time" => 20,
-    "long_time" => 21
-  }
-
-  defp generate_number_format_definitions(styles) do
-    styles
-    |> Enum.with_index(164)
-    |> Enum.filter(fn {style, _} ->
-      style.number_format != nil and not Map.has_key?(@built_in_formats, style.number_format)
-    end)
-    |> Enum.map(fn {style, index} ->
+  defp generate_number_format_definitions(custom_number_format_map) do
+    custom_number_format_map
+    |> Enum.map(fn {format_code, id} ->
       """
-      <numFmt numFmtId="#{index}" formatCode="#{escape_xml(style.number_format)}"/>
+      <numFmt numFmtId="#{id}" formatCode="#{escape_xml(format_code)}"/>
       """
     end)
     |> Enum.join("\n")
   end
 
-  defp count_custom_number_formats(styles) do
-    styles
-    |> Enum.count(fn style ->
-      style.number_format != nil and not Map.has_key?(@built_in_formats, style.number_format)
-    end)
+  defp count_custom_number_formats(custom_number_format_map) do
+    map_size(custom_number_format_map)
   end
 
-  defp get_number_format_id(style, unique_styles) do
+  defp get_number_format_id(style, custom_number_format_map) do
     cond do
-      is_nil(style.number_format) -> 0
-      Map.has_key?(@built_in_formats, style.number_format) -> @built_in_formats[style.number_format]
-      true -> 164 + Enum.find_index(unique_styles, &(&1 == style))
+      is_nil(style.number_format) ->
+        0
+
+      Map.has_key?(@built_in_formats, style.number_format) ->
+        @built_in_formats[style.number_format]
+
+      true ->
+        Map.get(custom_number_format_map, style.number_format)
     end
   end
 
@@ -447,26 +468,16 @@ defmodule Celex do
     |> Enum.join("\n")
   end
 
-  defp generate_fill_definitions(styles) do
-    styles
-    |> Enum.map(fn style ->
-      case style.background_color do
-        nil ->
-          """
-            <fill>
-              <patternFill patternType="none"/>
-            </fill>
-          """
-
-        color ->
-          """
-            <fill>
-              <patternFill patternType="solid">
-                <fgColor rgb="#{color}"/>
-              </patternFill>
-            </fill>
-          """
-      end
+  defp generate_fill_definitions(fill_map) do
+    fill_map
+    |> Enum.map(fn {color, _id} ->
+      """
+        <fill>
+          <patternFill patternType="solid">
+            <fgColor rgb="#{color}"/>
+          </patternFill>
+        </fill>
+      """
     end)
     |> Enum.join("\n")
   end
@@ -478,25 +489,25 @@ defmodule Celex do
     """
   end
 
-    defp generate_cell_xfs(styles) do
-      styles
-      |> Enum.with_index(1)
-      |> Enum.map(fn {style, index} ->
-        font_id = index
-        fill_id = if style.background_color, do: index + 1, else: 0
-        num_fmt_id = get_number_format_id(style, styles)
-        alignment = generate_alignment_attribute(style.alignment)
-        apply_number_format = if style.number_format, do: "1", else: "0"
+  defp generate_cell_xfs(styles, custom_number_format_map, fill_map) do
+    styles
+    |> Enum.with_index(1)
+    |> Enum.map(fn {style, index} ->
+      font_id = index
+      fill_id = Map.get(fill_map, style.background_color, 0)
+      num_fmt_id = get_number_format_id(style, custom_number_format_map)
+      alignment = generate_alignment_attribute(style.alignment)
+      apply_number_format = if style.number_format, do: "1", else: "0"
 
-        """
-        <xf numFmtId="#{num_fmt_id}" fontId="#{font_id}" fillId="#{fill_id}" borderId="0" xfId="0"
-            applyFont="1" applyFill="1" applyNumberFormat="#{apply_number_format}" applyAlignment="1">
-          #{alignment}
-        </xf>
-        """
-      end)
-      |> Enum.join("\n")
-    end
+      """
+      <xf numFmtId="#{num_fmt_id}" fontId="#{font_id}" fillId="#{fill_id}" borderId="0" xfId="0"
+          applyFont="1" applyFill="1" applyNumberFormat="#{apply_number_format}" applyAlignment="1">
+        #{alignment}
+      </xf>
+      """
+    end)
+    |> Enum.join("\n")
+  end
 
   defp to_col_string(num) when num < 26, do: <<?A + num>>
   defp to_col_string(num) do
