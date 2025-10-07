@@ -270,9 +270,9 @@ defmodule Celex do
   defp generate_row_xml({row, row_num}, style_index_map) do
     cells =
       row
-      |> Enum.with_index(?A)
-      |> Enum.map(fn {value, col} ->
-        cell_ref = "#{<<col>>}#{row_num}"
+      |> Enum.with_index(0)
+      |> Enum.map(fn {value, col_idx} ->
+        cell_ref = to_col_string(col_idx) <> Integer.to_string(row_num)
         generate_cell_xml(value, cell_ref, style_index_map)
       end)
       |> Enum.join("\n")
@@ -497,6 +497,11 @@ defmodule Celex do
       end)
       |> Enum.join("\n")
     end
+
+  defp to_col_string(num) when num < 26, do: <<?A + num>>
+  defp to_col_string(num) do
+    to_col_string(div(num, 26) - 1) <> to_col_string(rem(num, 26))
+  end
 
   defp escape_xml(string) do
     string
