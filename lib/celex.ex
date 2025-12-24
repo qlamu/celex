@@ -474,7 +474,7 @@ defmodule Celex do
   defp generate_alignment_attribute(nil), do: ""
   defp generate_alignment_attribute(alignment) do
     """
-    <alignment horizontal="#{alignment}"/>
+    <alignment horizontal="#{escape_xml(to_string(alignment))}"/>
     """
   end
 
