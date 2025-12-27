@@ -72,6 +72,14 @@ defmodule Celex.Writer do
         StreamWriter.merge_cells(w, region)
       end)
 
+    # Set auto filter if present
+    writer =
+      if sheet.auto_filter do
+        StreamWriter.set_auto_filter(writer, sheet.auto_filter)
+      else
+        writer
+      end
+
     # Write rows
     case Sheet.dimensions(sheet) do
       nil ->

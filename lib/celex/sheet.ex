@@ -31,7 +31,8 @@ defmodule Celex.Sheet do
           column_widths: %{(String.t() | pos_integer()) => number()},
           row_heights: %{pos_integer() => number()},
           merged_regions: [String.t()],
-          hidden: boolean()
+          hidden: boolean(),
+          auto_filter: String.t() | nil
         }
 
   defstruct name: "",
@@ -41,7 +42,8 @@ defmodule Celex.Sheet do
             column_widths: %{},
             row_heights: %{},
             merged_regions: [],
-            hidden: false
+            hidden: false,
+            auto_filter: nil
 
   @doc """
   Creates a new sheet with the given name.
@@ -199,6 +201,22 @@ defmodule Celex.Sheet do
   @spec merge_cells(t(), String.t()) :: t()
   def merge_cells(%__MODULE__{merged_regions: regions} = sheet, range) do
     %{sheet | merged_regions: [range | regions]}
+  end
+
+  @doc """
+  Sets the auto filter range for the sheet.
+
+  The range should be in A1:B1 format, typically covering the header row.
+  Pass `nil` to remove the auto filter.
+
+  ## Examples
+
+      Sheet.set_auto_filter(sheet, "A1:D1")
+      Sheet.set_auto_filter(sheet, nil)  # Remove filter
+  """
+  @spec set_auto_filter(t(), String.t() | nil) :: t()
+  def set_auto_filter(%__MODULE__{} = sheet, range) do
+    %{sheet | auto_filter: range}
   end
 
   @doc """

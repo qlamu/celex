@@ -205,4 +205,49 @@ defmodule Celex.StreamWriterTest do
       assert size > 100_000
     end
   end
+
+  describe "set_auto_filter/2" do
+    test "sets auto filter for current sheet", %{path: path} do
+      {:ok, writer} = StreamWriter.open(path)
+
+      :ok =
+        writer
+        |> StreamWriter.start_sheet("Data")
+        |> StreamWriter.write_row(["Name", "Age", "City"])
+        |> StreamWriter.write_row(["Alice", 30, "NYC"])
+        |> StreamWriter.set_auto_filter("A1:C1")
+        |> StreamWriter.close()
+
+      assert File.exists?(path)
+
+      # Verify autoFilter is in the XML
+      {:ok, zip} = :zip.zip_open(String.to_charlist(path), [:memory])
+      {:ok, {_, content}} = :zip.zip_get(~c"xl/worksheets/sheet1.xml", zip)
+      :zip.zip_close(zip)
+
+      xml = to_string(content)
+      assert String.contains?(xml, "<autoFilter ref=\"A1:C1\"/>")
+    end
+
+    test "auto filter persists across sheet switch", %{path: path} do
+      {:ok, writer} = StreamWriter.open(path)
+
+      :ok =
+        writer
+        |> StreamWriter.start_sheet("Sheet1")
+        |> StreamWriter.write_row(["A", "B"])
+        |> StreamWriter.set_auto_filter("A1:B1")
+        |> StreamWriter.start_sheet("Sheet2")
+        |> StreamWriter.write_row(["C", "D"])
+        |> StreamWriter.close()
+
+      # Verify Sheet1 has autoFilter
+      {:ok, zip} = :zip.zip_open(String.to_charlist(path), [:memory])
+      {:ok, {_, content}} = :zip.zip_get(~c"xl/worksheets/sheet1.xml", zip)
+      :zip.zip_close(zip)
+
+      xml = to_string(content)
+      assert String.contains?(xml, "<autoFilter ref=\"A1:B1\"/>")
+    end
+  end
 end

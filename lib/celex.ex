@@ -180,6 +180,33 @@ defmodule Celex do
   end
 
   @doc """
+  Sets the auto filter range for the current sheet.
+
+  The range should be in A1:B1 format, typically covering the header row.
+  This adds filter dropdowns to the specified columns in Excel.
+
+  ## Examples
+
+      workbook
+      |> Celex.add_sheet("Data")
+      |> Celex.put_cell("A1", "Name")
+      |> Celex.put_cell("B1", "Age")
+      |> Celex.set_auto_filter("A1:B1")
+  """
+  @spec set_auto_filter(Workbook.t(), String.t()) :: Workbook.t()
+  def set_auto_filter(%Workbook{sheets: []} = _workbook, _range) do
+    raise "No sheet exists. Call add_sheet/2 first."
+  end
+
+  def set_auto_filter(%Workbook{sheets: sheets} = workbook, range) do
+    last_sheet = List.last(sheets)
+
+    Workbook.update_sheet(workbook, last_sheet.name, fn sheet ->
+      Sheet.set_auto_filter(sheet, range)
+    end)
+  end
+
+  @doc """
   Returns the list of sheet names.
 
   ## Examples

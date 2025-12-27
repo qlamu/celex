@@ -24,6 +24,7 @@ defmodule Celex.XML.WorksheetXML do
     dimension = build_dimension(sheet)
     cols = build_columns(sheet)
     sheet_data = build_sheet_data(sheet)
+    auto_filter = build_auto_filter(sheet)
     merge_cells = build_merge_cells(sheet)
 
     """
@@ -34,6 +35,7 @@ defmodule Celex.XML.WorksheetXML do
     <sheetData>
     #{sheet_data}
     </sheetData>
+    #{auto_filter}
     #{merge_cells}
     </worksheet>
     """
@@ -101,6 +103,14 @@ defmodule Celex.XML.WorksheetXML do
   @spec generate_footer(keyword()) :: String.t()
   def generate_footer(opts \\ []) do
     merge_cells = Keyword.get(opts, :merge_cells, [])
+    auto_filter = Keyword.get(opts, :auto_filter)
+
+    auto_filter_xml =
+      if auto_filter do
+        "\n<autoFilter ref=\"#{auto_filter}\"/>"
+      else
+        ""
+      end
 
     merge_xml =
       if merge_cells != [] do
@@ -110,7 +120,7 @@ defmodule Celex.XML.WorksheetXML do
         ""
       end
 
-    "</sheetData>#{merge_xml}\n</worksheet>"
+    "</sheetData>#{auto_filter_xml}#{merge_xml}\n</worksheet>"
   end
 
   # Private functions
@@ -186,6 +196,12 @@ defmodule Celex.XML.WorksheetXML do
   defp build_merge_cells(%Sheet{merged_regions: regions}) do
     cells = Enum.map(regions, &"<mergeCell ref=\"#{&1}\"/>") |> Enum.join("\n")
     "<mergeCells count=\"#{length(regions)}\">\n#{cells}\n</mergeCells>"
+  end
+
+  defp build_auto_filter(%Sheet{auto_filter: nil}), do: ""
+
+  defp build_auto_filter(%Sheet{auto_filter: range}) do
+    "<autoFilter ref=\"#{range}\"/>"
   end
 
   defp normalize_cell(%Cell{} = cell), do: cell

@@ -109,6 +109,19 @@ defmodule Celex.ReaderTest do
 
       assert {:error, :sheet_not_found} = result
     end
+
+    test "returns error for out of bounds index", %{path: path} do
+      Celex.stream_write(path, fn writer ->
+        writer
+        |> Celex.StreamWriter.start_sheet("Data")
+        |> Celex.StreamWriter.write_row(["Test"])
+      end)
+
+      {:ok, workbook} = Reader.read(path)
+      result = Reader.get_sheet(workbook, 99)
+
+      assert {:error, :sheet_not_found} = result
+    end
   end
 
   describe "get_cell/3" do
@@ -156,6 +169,20 @@ defmodule Celex.ReaderTest do
 
       assert Reader.get_cell(sheet, "B1") == nil
       assert Reader.get_cell(sheet, "Z99") == nil
+    end
+
+    test "returns nil for invalid cell reference", %{path: path} do
+      Celex.stream_write(path, fn writer ->
+        writer
+        |> Celex.StreamWriter.start_sheet("Data")
+        |> Celex.StreamWriter.write_row(["Test"])
+      end)
+
+      {:ok, workbook} = Reader.read(path)
+      {:ok, sheet} = Reader.get_sheet(workbook, "Data")
+
+      assert Reader.get_cell(sheet, "invalid") == nil
+      assert Reader.get_cell(sheet, "") == nil
     end
   end
 

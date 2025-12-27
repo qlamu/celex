@@ -33,3 +33,6 @@ celex-*.tar
 # OS
 .DS_Store
 Thumbs.db
+
+# Test artifacts
+*.xlsx

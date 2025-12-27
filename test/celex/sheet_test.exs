@@ -220,4 +220,32 @@ defmodule Celex.SheetTest do
       assert Enum.at(row2, 0).value == "A2"
     end
   end
+
+  describe "set_auto_filter/2" do
+    test "sets auto filter range" do
+      sheet =
+        Sheet.new("Data")
+        |> Sheet.set_auto_filter("A1:D1")
+
+      assert sheet.auto_filter == "A1:D1"
+    end
+
+    test "replaces existing auto filter" do
+      sheet =
+        Sheet.new("Data")
+        |> Sheet.set_auto_filter("A1:B1")
+        |> Sheet.set_auto_filter("A1:E1")
+
+      assert sheet.auto_filter == "A1:E1"
+    end
+
+    test "accepts nil to remove auto filter" do
+      sheet =
+        Sheet.new("Data")
+        |> Sheet.set_auto_filter("A1:D1")
+        |> Sheet.set_auto_filter(nil)
+
+      assert sheet.auto_filter == nil
+    end
+  end
 end

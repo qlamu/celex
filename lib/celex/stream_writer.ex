@@ -42,7 +42,8 @@ defmodule Celex.StreamWriter do
           current_file: pid() | nil,
           row_count: non_neg_integer(),
           column_widths: map(),
-          merged_regions: [String.t()]
+          merged_regions: [String.t()],
+          auto_filter: String.t() | nil
         }
 
   defstruct [
@@ -53,7 +54,8 @@ defmodule Celex.StreamWriter do
     current_file: nil,
     row_count: 0,
     column_widths: %{},
-    merged_regions: []
+    merged_regions: [],
+    auto_filter: nil
   ]
 
   @doc """
@@ -99,7 +101,8 @@ defmodule Celex.StreamWriter do
         current_file: file,
         row_count: 0,
         column_widths: %{},
-        merged_regions: []
+        merged_regions: [],
+        auto_filter: nil
     }
   end
 
@@ -150,6 +153,23 @@ defmodule Celex.StreamWriter do
   end
 
   @doc """
+  Sets the auto filter range for the current sheet.
+
+  The range should be in A1:B1 format, typically covering the header row.
+
+  ## Examples
+
+      writer
+      |> StreamWriter.start_sheet("Data")
+      |> StreamWriter.write_row(["Name", "Age", "City"])
+      |> StreamWriter.set_auto_filter("A1:C1")
+  """
+  @spec set_auto_filter(t(), String.t()) :: t()
+  def set_auto_filter(%__MODULE__{} = writer, range) when is_binary(range) do
+    %{writer | auto_filter: range}
+  end
+
+  @doc """
   Closes the writer and creates the final XLSX file.
 
   This finalizes all sheets and builds the ZIP archive.
@@ -196,9 +216,17 @@ defmodule Celex.StreamWriter do
 
   defp finalize_current_sheet(%__MODULE__{current_file: nil} = writer), do: writer
 
-  defp finalize_current_sheet(%__MODULE__{current_file: file, merged_regions: regions} = writer) do
+  defp finalize_current_sheet(
+         %__MODULE__{current_file: file, merged_regions: regions, auto_filter: auto_filter} =
+           writer
+       ) do
     # Write sheet footer
-    footer = WorksheetXML.generate_footer(merge_cells: Enum.reverse(regions))
+    footer =
+      WorksheetXML.generate_footer(
+        merge_cells: Enum.reverse(regions),
+        auto_filter: auto_filter
+      )
+
     IO.write(file, footer)
     File.close(file)
 

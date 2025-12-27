@@ -158,6 +158,54 @@ defmodule Celex.StreamReaderTest do
     end
   end
 
+  describe "stream_rows/2 edge cases" do
+    test "returns empty list for non-existent sheet name" do
+      path =
+        create_test_xlsx("nosheet", fn writer ->
+          writer
+          |> Celex.StreamWriter.start_sheet("Data")
+          |> Celex.StreamWriter.write_row(["Test"])
+        end)
+
+      {:ok, reader} = StreamReader.open(path)
+      rows = StreamReader.stream_rows(reader, "NonExistent") |> Enum.to_list()
+
+      assert rows == []
+      StreamReader.close(reader)
+    end
+
+    test "returns empty list for out of bounds index" do
+      path =
+        create_test_xlsx("outofbounds", fn writer ->
+          writer
+          |> Celex.StreamWriter.start_sheet("Data")
+          |> Celex.StreamWriter.write_row(["Test"])
+        end)
+
+      {:ok, reader} = StreamReader.open(path)
+      rows = StreamReader.stream_rows(reader, 99) |> Enum.to_list()
+
+      assert rows == []
+      StreamReader.close(reader)
+    end
+  end
+
+  describe "close/1" do
+    test "can close reader multiple times safely" do
+      path =
+        create_test_xlsx("closetwice", fn writer ->
+          writer
+          |> Celex.StreamWriter.start_sheet("Data")
+          |> Celex.StreamWriter.write_row(["Test"])
+        end)
+
+      {:ok, reader} = StreamReader.open(path)
+      assert :ok = StreamReader.close(reader)
+      # Second close should also be safe
+      assert :ok = StreamReader.close(%{reader | zip_handle: nil})
+    end
+  end
+
   describe "read_rows/2" do
     test "reads all rows into a list" do
       path =

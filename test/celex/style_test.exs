@@ -176,8 +176,77 @@ defmodule Celex.StyleTest do
       assert Style.number_format(:datetime) == "yyyy-mm-dd hh:mm:ss"
     end
 
+    test "time format" do
+      assert Style.number_format(:time) == "hh:mm:ss"
+    end
+
+    test "integer format" do
+      assert Style.number_format(:integer) == "#,##0"
+    end
+
+    test "decimal format" do
+      assert Style.number_format(:decimal) == "#,##0.00"
+    end
+
     test "custom format passthrough" do
       assert Style.number_format("#,##0.000") == "#,##0.000"
+    end
+  end
+
+  describe "new/1 with struct inputs" do
+    test "accepts Font struct directly" do
+      font = Style.Font.new(bold: true, size: 16)
+      style = Style.new(font: font)
+      assert style.font.bold == true
+      assert style.font.size == 16
+    end
+
+    test "accepts Fill struct directly" do
+      fill = Style.Fill.new(color: "#00FF00", pattern: :solid)
+      style = Style.new(fill: fill)
+      assert style.fill.color == "#00FF00"
+      assert style.fill.pattern == :solid
+    end
+
+    test "accepts Border struct directly" do
+      border = Style.Border.new(left: :medium, top: :thick)
+      style = Style.new(border: border)
+      assert style.border.left == :medium
+      assert style.border.top == :thick
+    end
+
+    test "accepts Alignment struct directly" do
+      alignment = Style.Alignment.new(horizontal: :right, wrap_text: true)
+      style = Style.new(alignment: alignment)
+      assert style.alignment.horizontal == :right
+      assert style.alignment.wrap_text == true
+    end
+  end
+
+  describe "merge/2 edge cases" do
+    test "merges when first style has nil components" do
+      style1 = Style.new()
+      style2 = Style.new(font: %{bold: true})
+      merged = Style.merge(style1, style2)
+
+      assert merged.font.bold == true
+    end
+
+    test "merges when second style has nil components" do
+      style1 = Style.new(font: %{bold: true})
+      style2 = Style.new()
+      merged = Style.merge(style1, style2)
+
+      assert merged.font.bold == true
+    end
+
+    test "merges when both styles have nil components" do
+      style1 = Style.new()
+      style2 = Style.new()
+      merged = Style.merge(style1, style2)
+
+      assert merged.font == nil
+      assert merged.fill == nil
     end
   end
 end

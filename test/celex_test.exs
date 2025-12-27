@@ -74,6 +74,34 @@ defmodule CelexTest do
       assert "A1:D1" in sheet.merged_regions
     end
 
+    test "sets auto filter on current sheet" do
+      workbook =
+        Celex.new()
+        |> Celex.add_sheet("Data")
+        |> Celex.put_cell("A1", "Name")
+        |> Celex.put_cell("B1", "Age")
+        |> Celex.set_auto_filter("A1:B1")
+
+      sheet = Celex.Workbook.get_sheet(workbook, "Data")
+      assert sheet.auto_filter == "A1:B1"
+    end
+
+    test "auto filter is written to file", %{path: path} do
+      Celex.new()
+      |> Celex.add_sheet("Data")
+      |> Celex.put_cell("A1", "Name")
+      |> Celex.put_cell("B1", "Age")
+      |> Celex.set_auto_filter("A1:B1")
+      |> Celex.write!(path)
+
+      # Verify autoFilter in XML
+      {:ok, zip} = :zip.zip_open(String.to_charlist(path), [:memory])
+      {:ok, {_, content}} = :zip.zip_get(~c"xl/worksheets/sheet1.xml", zip)
+      :zip.zip_close(zip)
+
+      assert String.contains?(to_string(content), "<autoFilter ref=\"A1:B1\"/>")
+    end
+
     test "writes workbook to file", %{path: path} do
       workbook =
         Celex.new()
@@ -254,6 +282,53 @@ defmodule CelexTest do
       last_row = Enum.at(read_data, 3)
       assert Enum.at(last_row, 1) == 42
       assert Enum.at(last_row, 3) == true
+    end
+  end
+
+  describe "error handling" do
+    test "put_cell raises when no sheet exists" do
+      workbook = Celex.new()
+
+      assert_raise RuntimeError, ~r/No sheet exists/, fn ->
+        Celex.put_cell(workbook, "A1", "Test")
+      end
+    end
+
+    test "set_column_width raises when no sheet exists" do
+      workbook = Celex.new()
+
+      assert_raise RuntimeError, ~r/No sheet exists/, fn ->
+        Celex.set_column_width(workbook, "A", 20)
+      end
+    end
+
+    test "set_row_height raises when no sheet exists" do
+      workbook = Celex.new()
+
+      assert_raise RuntimeError, ~r/No sheet exists/, fn ->
+        Celex.set_row_height(workbook, 1, 25)
+      end
+    end
+
+    test "merge_cells raises when no sheet exists" do
+      workbook = Celex.new()
+
+      assert_raise RuntimeError, ~r/No sheet exists/, fn ->
+        Celex.merge_cells(workbook, "A1:B2")
+      end
+    end
+
+    test "set_auto_filter raises when no sheet exists" do
+      workbook = Celex.new()
+
+      assert_raise RuntimeError, ~r/No sheet exists/, fn ->
+        Celex.set_auto_filter(workbook, "A1:D1")
+      end
+    end
+
+    test "stream_sheet returns empty stream for non-existent file" do
+      rows = Celex.stream_sheet("/non/existent/file.xlsx", "Sheet1") |> Enum.to_list()
+      assert rows == []
     end
   end
 

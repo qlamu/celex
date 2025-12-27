@@ -15,7 +15,8 @@ defmodule Celex.MixProject do
       package: package(),
       docs: docs(),
       name: "Celex",
-      source_url: @source_url
+      source_url: @source_url,
+      test_coverage: [summary: [threshold: 90]]
     ]
   end
 

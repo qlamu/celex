@@ -94,6 +94,30 @@ defmodule Celex.XML.WorksheetXMLTest do
       assert String.contains?(xml, "<v>")
     end
 
+    test "generates cell for datetime" do
+      sheet =
+        Sheet.new("Test")
+        |> Sheet.put_cell("A1", ~N[2024-06-15 14:30:00])
+
+      xml = WorksheetXML.generate(sheet)
+
+      # DateTime should be converted to Excel serial number with fractional day
+      assert String.contains?(xml, "<v>")
+      assert String.contains?(xml, "<c r=\"A1\"")
+    end
+
+    test "generates cell for time" do
+      sheet =
+        Sheet.new("Test")
+        |> Sheet.put_cell("A1", ~T[14:30:00])
+
+      xml = WorksheetXML.generate(sheet)
+
+      # Time should be converted to fractional day
+      assert String.contains?(xml, "<v>")
+      assert String.contains?(xml, "<c r=\"A1\"")
+    end
+
     test "generates cell for formula" do
       sheet =
         Sheet.new("Test")
@@ -102,6 +126,17 @@ defmodule Celex.XML.WorksheetXMLTest do
       xml = WorksheetXML.generate(sheet)
 
       assert String.contains?(xml, "<f>SUM(A1:A2)</f>")
+    end
+
+    test "generates cell for formula with cached value" do
+      # Create a cell with a formula and a cached value
+      cell = %Cell{formula: "A1+A2", value: 42, type: :number}
+      sheet = %Sheet{Sheet.new("Test") | cells: %{{1, 1} => cell}}
+
+      xml = WorksheetXML.generate(sheet)
+
+      assert String.contains?(xml, "<f>A1+A2</f>")
+      assert String.contains?(xml, "<v>42</v>")
     end
 
     test "handles multiple cells in a row" do
@@ -210,6 +245,88 @@ defmodule Celex.XML.WorksheetXMLTest do
       assert String.contains?(xml, "<is><t>Hello</t></is>")
       assert String.contains?(xml, "<v>42</v>")
       assert String.contains?(xml, "t=\"b\"")
+    end
+  end
+
+  describe "generate_header/1 and generate_footer/1" do
+    test "generates header with dimension option" do
+      header = WorksheetXML.generate_header(dimension: {{1, 1}, {10, 5}})
+
+      assert String.contains?(header, "<?xml")
+      assert String.contains?(header, "<dimension ref=\"A1:E10\"")
+      assert String.contains?(header, "<sheetData>")
+    end
+
+    test "generates header with columns option" do
+      header = WorksheetXML.generate_header(columns: [{"A", 20}, {"B", 30}])
+
+      assert String.contains?(header, "<cols>")
+      assert String.contains?(header, "width=\"20\"")
+      assert String.contains?(header, "width=\"30\"")
+    end
+
+    test "generates footer with merge_cells option" do
+      footer = WorksheetXML.generate_footer(merge_cells: ["A1:B2", "C1:D2"])
+
+      assert String.contains?(footer, "</sheetData>")
+      assert String.contains?(footer, "<mergeCells")
+      assert String.contains?(footer, "A1:B2")
+      assert String.contains?(footer, "C1:D2")
+    end
+
+    test "generates footer with auto_filter option" do
+      footer = WorksheetXML.generate_footer(auto_filter: "A1:E1")
+
+      assert String.contains?(footer, "</sheetData>")
+      assert String.contains?(footer, "<autoFilter ref=\"A1:E1\"")
+    end
+
+    test "generates footer with both options" do
+      footer = WorksheetXML.generate_footer(
+        merge_cells: ["A1:B1"],
+        auto_filter: "A1:D1"
+      )
+
+      assert String.contains?(footer, "<autoFilter ref=\"A1:D1\"")
+      assert String.contains?(footer, "<mergeCells")
+    end
+  end
+
+  describe "auto filter" do
+    test "generates autoFilter element when set" do
+      sheet =
+        Sheet.new("Test")
+        |> Sheet.put_cell("A1", "Name")
+        |> Sheet.put_cell("B1", "Value")
+        |> Sheet.set_auto_filter("A1:B1")
+
+      xml = WorksheetXML.generate(sheet)
+
+      assert String.contains?(xml, "<autoFilter ref=\"A1:B1\"/>")
+    end
+
+    test "does not include autoFilter when not set" do
+      sheet =
+        Sheet.new("Test")
+        |> Sheet.put_cell("A1", "Name")
+
+      xml = WorksheetXML.generate(sheet)
+
+      refute String.contains?(xml, "autoFilter")
+    end
+
+    test "autoFilter appears after sheetData" do
+      sheet =
+        Sheet.new("Test")
+        |> Sheet.put_cell("A1", "Name")
+        |> Sheet.set_auto_filter("A1:D1")
+
+      xml = WorksheetXML.generate(sheet)
+
+      sheet_data_pos = :binary.match(xml, "</sheetData>") |> elem(0)
+      auto_filter_pos = :binary.match(xml, "<autoFilter") |> elem(0)
+
+      assert auto_filter_pos > sheet_data_pos
     end
   end
 end
